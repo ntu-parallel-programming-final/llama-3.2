@@ -40,6 +40,7 @@ TOP_K = 1
 url = f"https://huggingface.co/rasbt/llama-3.2-from-scratch/resolve/main/{MODEL_FILE}"
 
 if not os.path.exists(MODEL_FILE):
+    print(f"Downloading {MODEL_FILE}...")
     urllib.request.urlretrieve(url, MODEL_FILE)
     print(f"Downloaded to {MODEL_FILE}")
 

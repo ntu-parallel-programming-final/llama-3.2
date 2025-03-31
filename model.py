@@ -97,11 +97,8 @@ class TransformerBlock(nn.Module):
         self.att = GroupedQueryAttention(
             d_in=cfg["emb_dim"],
             d_out=cfg["emb_dim"],
-            context_length=cfg["context_length"],
             num_heads=cfg["n_heads"],
             num_kv_groups=cfg["n_kv_groups"],
-            rope_base=cfg["rope_base"],
-            rope_config=cfg["rope_freq"],
             dtype=cfg["dtype"]
         )
         self.ff = FeedForward(cfg)
@@ -140,10 +137,8 @@ class FeedForward(nn.Module):
 
 class GroupedQueryAttention(nn.Module):
     def __init__(
-            self, d_in, d_out, context_length, num_heads,
+            self, d_in, d_out, num_heads,
             num_kv_groups,
-            rope_base=10_000,
-            rope_config=None,
             dtype=None
     ):
         super().__init__()
@@ -306,14 +301,14 @@ def generate(model, idx, max_new_tokens, context_size, temperature=0.0, top_k=No
             logits = model(idx_cond)
         logits = logits[:, -1, :]
 
-        # New: Filter logits with top_k sampling
+        # Filter logits with top_k sampling
         if top_k is not None:
             # Keep only top_k values
             top_logits, _ = torch.topk(logits, top_k)
             min_val = top_logits[:, -1]
             logits = torch.where(logits < min_val, torch.tensor(float('-inf')).to(logits.device), logits)
 
-        # New: Apply temperature scaling
+        # Apply temperature scaling
         if temperature > 0.0:
             logits = logits / temperature
 
