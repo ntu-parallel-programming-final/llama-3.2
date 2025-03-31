@@ -241,3 +241,20 @@ Output text:
 It's worth noting that the specific diet of llamas can vary depending on factors such as the breed,
 ```
 
+
+**Pro tip**
+
+Replace
+
+```python
+model.to(device)
+```
+
+with
+
+```python
+model = torch.compile(model)
+model.to(device)
+```
+
+for a 4x speed-up (after the first `generate` call).
