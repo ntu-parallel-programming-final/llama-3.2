@@ -109,6 +109,10 @@ TOP_K = 1
 This automatically downloads the weight file based on the model choice above:
 
 ```python
+import os
+import urllib.request
+
+
 url = f"https://huggingface.co/rasbt/llama-3.2-from-scratch/resolve/main/{MODEL_FILE}"
 
 if not os.path.exists(MODEL_FILE):
@@ -162,7 +166,7 @@ if not os.path.exists(TOKENIZER_FILE):
     urllib.request.urlretrieve(url, TOKENIZER_FILE)
     print(f"Downloaded to {TOKENIZER_FILE}")
     
-tokenizer = Tokenizer("tokenizer.model")
+tokenizer = Llama3Tokenizer("tokenizer.model")
 
 if "instruct" in MODEL_FILE:
     tokenizer = ChatFormat(tokenizer)
@@ -174,6 +178,8 @@ if "instruct" in MODEL_FILE:
 Lastly, we can generate text via the following code:
 
 ```python
+import time
+
 from model import (
     generate,
     text_to_token_ids,
