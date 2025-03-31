@@ -10,7 +10,7 @@ import tiktoken
 from tiktoken.load import load_tiktoken_bpe
 
 
-class Tokenizer:
+class Llama3Tokenizer:
     def __init__(self, model_path):
         assert os.path.isfile(model_path), f"Model file {model_path} not found"
         mergeable_ranks = load_tiktoken_bpe(model_path)

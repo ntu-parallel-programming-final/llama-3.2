@@ -2,10 +2,7 @@
 # Source for "Build a Large Language Model From Scratch"
 # https://github.com/rasbt/LLMs-from-scratch/blob/main/ch05/07_gpt_to_llama/standalone-llama32.ipynb
 
-import os
 import time
-import urllib.request
-
 import torch
 
 from model import Llama3Model, generate, text_to_token_ids, token_ids_to_text
@@ -32,18 +29,6 @@ TEMPERATURE = 0.
 TOP_K = 1
 #######################################
 
-
-###################################
-# Initialize model
-##################################
-
-url = f"https://huggingface.co/rasbt/llama-3.2-from-scratch/resolve/main/{MODEL_FILE}"
-
-if not os.path.exists(MODEL_FILE):
-    urllib.request.urlretrieve(url, MODEL_FILE)
-    print(f"Downloaded to {MODEL_FILE}")
-
-
 if "1B" in MODEL_FILE:
     from model import LLAMA32_CONFIG_1B as LLAMA32_CONFIG
 elif "3B" in MODEL_FILE:
@@ -51,9 +36,13 @@ elif "3B" in MODEL_FILE:
 else:
     raise ValueError("Incorrect model file name")
 
-LLAMA32_CONFIG["context_length"] = MODEL_CONTEXT_LENGTH
-
 model = Llama3Model(LLAMA32_CONFIG)
+
+tokenizer = Tokenizer("tokenizer.model")
+
+if "instruct" in MODEL_FILE:
+    tokenizer = ChatFormat(tokenizer)
+
 model.load_state_dict(torch.load(MODEL_FILE, weights_only=True))
 
 device = (
@@ -62,25 +51,6 @@ device = (
     torch.device("cpu")
 )
 model.to(device)
-
-###################################
-# Initialize tokenizer
-##################################
-TOKENIZER_FILE = "tokenizer.model"
-
-url = f"https://huggingface.co/rasbt/llama-3.2-from-scratch/resolve/main/{TOKENIZER_FILE}"
-
-if not os.path.exists(TOKENIZER_FILE):
-    urllib.request.urlretrieve(url, TOKENIZER_FILE)
-    print(f"Downloaded to {TOKENIZER_FILE}")
-tokenizer = Llama3Tokenizer("tokenizer.model")
-
-if "instruct" in MODEL_FILE:
-    tokenizer = ChatFormat(tokenizer)
-
-###################################
-# Generate text
-##################################
 
 torch.manual_seed(123)
 
