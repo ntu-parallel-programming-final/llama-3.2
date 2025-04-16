@@ -139,7 +139,7 @@ else:
 LLAMA32_CONFIG["context_length"] = MODEL_CONTEXT_LENGTH
 
 model = Llama3Model(LLAMA32_CONFIG)
-model.load_state_dict(torch.load(MODEL_FILE, weights_only=True))
+model.load_state_dict(torch.load(MODEL_FILE, weights_only=True, map_location="cpu"))
 
 device = (
     torch.device("cuda") if torch.cuda.is_available() else
