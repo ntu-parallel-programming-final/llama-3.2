@@ -87,12 +87,9 @@ MODEL_FILE = "llama3.2-1B-instruct.pth"
 # MODEL_FILE = "llama3.2-3B-base.pth"
 ```
 
-Basic text generation settings that can be defined by the user. Note that the recommended 8192-token context size requires approximately 3 GB of VRAM for the text generation example.
+Basic text generation settings that can be defined by the user. 
 
 ```
-MODEL_CONTEXT_LENGTH = 8192  # Supports up to 131_072
-
-# Text generation settings
 if "instruct" in MODEL_FILE:
     PROMPT = "What do llamas eat?"
 else:
@@ -139,7 +136,7 @@ else:
 LLAMA32_CONFIG["context_length"] = MODEL_CONTEXT_LENGTH
 
 model = Llama3Model(LLAMA32_CONFIG)
-model.load_state_dict(torch.load(MODEL_FILE, weights_only=True, map_location="cpu"))
+model.load_state_dict(torch.load(MODEL_FILE, weights_only=True))
 
 device = (
     torch.device("cuda") if torch.cuda.is_available() else

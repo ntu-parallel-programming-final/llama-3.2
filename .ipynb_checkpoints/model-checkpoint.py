@@ -9,7 +9,8 @@ import torch.nn as nn
 
 LLAMA32_CONFIG_1B = {
     "vocab_size": 128_256,           # Vocabulary size
-    "context_length": 131_072,       # Context length that was used to train the model
+    "context_length": 8192,          # Maximum context length to use (reduced to save memory)
+    "orig_context_length": 131_072,  # Context length that was used to train the model
     "emb_dim": 2048,                 # Embedding dimension
     "n_heads": 32,                   # Number of attention heads
     "n_layers": 16,                  # Number of layers
@@ -27,7 +28,8 @@ LLAMA32_CONFIG_1B = {
 
 LLAMA32_CONFIG_3B = {
     "vocab_size": 128_256,           # Vocabulary size
-    "context_length": 131_072,       # Context length that was used to train the model
+    "context_length": 8192,          # Maximum context length to use (reduced to save memory)
+    "orig_context_length": 131_072,  # Context length that was used to train the model
     "emb_dim": 3072,                 # Embedding dimension
     "n_heads": 24,                   # Number of attention heads
     "n_layers": 28,                  # Number of layers
@@ -59,6 +61,17 @@ class Llama3Model(nn.Module):
         self.out_head = nn.Linear(cfg["emb_dim"], cfg["vocab_size"], bias=False, dtype=cfg["dtype"])
 
         # Reusuable utilities
+        self.register_buffer(
+            "mask", torch.triu(torch.ones(cfg["context_length"], cfg["context_length"]), diagonal=1).bool(),
+            persistent=False
+        )
+
+        if cfg["orig_context_length"] != cfg["context_length"]:
+            cfg["rope_base"] = rescale_theta(
+                            cfg["rope_base"],
+                            cfg["orig_context_length"],
+                            cfg["context_length"]
+                        )
         cos, sin = compute_rope_params(
             head_dim=cfg["emb_dim"] // cfg["n_heads"],
             theta_base=cfg["rope_base"],
@@ -70,14 +83,12 @@ class Llama3Model(nn.Module):
         self.cfg = cfg
 
     def forward(self, in_idx):
+        # Forward pass
         tok_embeds = self.tok_emb(in_idx)
         x = tok_embeds
 
-        num_tokens = x.shape[1]
-        mask = torch.triu(torch.ones(num_tokens, num_tokens, device=x.device, dtype=torch.bool), diagonal=1)
-
         for block in self.trf_blocks:
-            x = block(x, mask, self.cos, self.sin)
+            x = block(x, self.mask, self.cos, self.sin)
         x = self.final_norm(x)
         logits = self.out_head(x.to(self.cfg["dtype"]))
         return logits
@@ -129,7 +140,9 @@ class FeedForward(nn.Module):
 
 class GroupedQueryAttention(nn.Module):
     def __init__(
-            self, d_in, d_out, num_heads, num_kv_groups, dtype=None
+            self, d_in, d_out, num_heads,
+            num_kv_groups,
+            dtype=None
     ):
         super().__init__()
         assert d_out % num_heads == 0, "d_out must be divisible by num_heads"
@@ -263,6 +276,12 @@ def apply_rope(x, cos, sin):
 
     # It's ok to use lower-precision after applying cos and sin rotation
     return x_rotated.to(dtype=x.dtype)
+
+
+def rescale_theta(theta_old, context_length_old, context_length_new):
+    scaling_factor = context_length_new / context_length_old
+    theta_new = theta_old * scaling_factor
+    return theta_new
 
 
 def text_to_token_ids(text, tokenizer):
