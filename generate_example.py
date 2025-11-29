@@ -14,8 +14,8 @@ from tokenizer import Llama3Tokenizer, ChatFormat, clean_text
 #######################################
 # Model settings
 
-MODEL_FILE = "llama3.2-1B-instruct.pth"
-# MODEL_FILE = "llama3.2-1B-base.pth"
+# MODEL_FILE = "llama3.2-1B-instruct.pth"
+MODEL_FILE = "llama3.2-1B-base.pth"
 # MODEL_FILE = "llama3.2-3B-instruct.pth"
 # MODEL_FILE = "llama3.2-3B-base.pth"
 
@@ -55,13 +55,13 @@ else:
 LLAMA32_CONFIG["context_length"] = MODEL_CONTEXT_LENGTH
 
 model = Llama3Model(LLAMA32_CONFIG)
-model.load_state_dict(torch.load(MODEL_FILE, weights_only=True))
 
 device = (
     torch.device("cuda") if torch.cuda.is_available() else
     torch.device("mps") if torch.backends.mps.is_available() else
     torch.device("cpu")
 )
+model.load_state_dict(torch.load(MODEL_FILE, map_location=device, weights_only=True))
 model.to(device)
 
 ###################################

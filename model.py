@@ -44,6 +44,25 @@ LLAMA32_CONFIG_3B = {
 }
 
 
+class RMSNorm(nn.Module):
+    def __init__(self, dim: int, eps: float = 1e-5, dtype=None):
+        super().__init__()
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones(dim, dtype=dtype))
+
+    def _norm(self, x):
+        # rsqrt is 1/sqrt
+        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+
+    def forward(self, x):
+        # The forward pass is designed to be numerically stable and ONNX-compatible.
+        # It casts to float32 for the normalization calculation and then casts back.
+        original_dtype = x.dtype
+        x_fp32 = x.to(torch.float32)
+        x_normed = self._norm(x_fp32)
+        return (x_normed * self.weight.to(torch.float32)).to(original_dtype)
+
+
 class Llama3Model(nn.Module):
     def __init__(self, cfg):
         super().__init__()
@@ -55,7 +74,7 @@ class Llama3Model(nn.Module):
             [TransformerBlock(cfg) for _ in range(cfg["n_layers"])]
         )
 
-        self.final_norm = nn.RMSNorm(cfg["emb_dim"], eps=1e-5, dtype=cfg["dtype"])
+        self.final_norm = RMSNorm(cfg["emb_dim"], eps=1e-5, dtype=cfg["dtype"])
         self.out_head = nn.Linear(cfg["emb_dim"], cfg["vocab_size"], bias=False, dtype=cfg["dtype"])
 
         # Reusuable utilities
@@ -94,8 +113,8 @@ class TransformerBlock(nn.Module):
             dtype=cfg["dtype"]
         )
         self.ff = FeedForward(cfg)
-        self.norm1 = nn.RMSNorm(cfg["emb_dim"], eps=1e-5, dtype=cfg["dtype"])
-        self.norm2 = nn.RMSNorm(cfg["emb_dim"], eps=1e-5, dtype=cfg["dtype"])
+        self.norm1 = RMSNorm(cfg["emb_dim"], eps=1e-5, dtype=cfg["dtype"])
+        self.norm2 = RMSNorm(cfg["emb_dim"], eps=1e-5, dtype=cfg["dtype"])
 
     def forward(self, x, mask, cos, sin):
         # Shortcut connection for attention block
