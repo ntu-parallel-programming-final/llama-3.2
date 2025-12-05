@@ -6,11 +6,11 @@ import tensorrt as trt
 import ctypes
 import pycuda.driver as cuda
 import pycuda.autoinit
+import argparse
 from tokenizer import Llama3Tokenizer
 from model import LLAMA32_CONFIG_1B, text_to_token_ids, token_ids_to_text
 
 # --- Configuration ---
-ENGINE_FILE = "llama3.2-1B-base.trt"
 TOKENIZER_FILE = "tokenizer.model"
 PROMPT = "We shall go on to the end, we shall fight in France"
 MAX_NEW_TOKENS = 150
@@ -127,24 +127,30 @@ def main():
     """
     Main function to run the TensorRT generation example.
     """
+    parser = argparse.ArgumentParser(description="Run inference with a Llama 3.2 TensorRT engine.")
+    parser.add_argument("-e", "--engine-file", type=str, help="Path to the TensorRT engine file.")
+    parser.add_argument("-p", "--prompt", type=str, default=PROMPT, help="The prompt for the model.")
+    parser.add_argument("-t", "--tokenizer-file", type=str, default=TOKENIZER_FILE, help="Path to the tokenizer model file.")
+    args = parser.parse_args()
+
     print("Loading tokenizer...")
-    tokenizer = Llama3Tokenizer(TOKENIZER_FILE)
-    
+    tokenizer = Llama3Tokenizer(args.tokenizer_file)
+
     print("Loading TensorRT engine...")
-    engine = load_engine(ENGINE_FILE)
-    
+    engine = load_engine(args.engine_file)
+
     print("Generating text...")
     output_text = generate_with_trt(
         engine=engine,
         tokenizer=tokenizer,
-        prompt=PROMPT,
+        prompt=args.prompt,
         max_new_tokens=MAX_NEW_TOKENS,
         temperature=TEMPERATURE,
-        top_k=TOP_K
+        top_k=TOP_K,
     )
 
     print("\n--- Prompt ---")
-    print(PROMPT)
+    print(args.prompt)
     print("\n--- Generated Text ---")
     print(output_text)
 
