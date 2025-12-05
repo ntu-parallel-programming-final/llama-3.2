@@ -18,7 +18,41 @@ TEMPERATURE = 0.0
 TOP_K = 1
 # --- End Configuration ---
 
+
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+
+class LayerProfiler(trt.IProfiler):
+    def __init__(self):
+        super(LayerProfiler, self).__init__()
+        self.layer_times = {}
+        self.total_time = 0
+
+    def report_layer_time(self, layer_name, ms):
+        if layer_name not in self.layer_times:
+            self.layer_times[layer_name] = 0
+        self.layer_times[layer_name] += ms
+        self.total_time += ms
+
+    def print_layer_times(self):
+        """Prints the layer times nicely."""
+        total_time = sum(self.layer_times.values())
+        if total_time == 0:
+            print("No layer timing information collected.")
+            return
+
+        print("\n--- TensorRT Layer-wise Profile ---")
+        # Sort layers by their execution time in descending order
+        sorted_layers = sorted(self.layer_times.items(), key=lambda item: item[1], reverse=True)
+
+        for layer_name, time_ms in sorted_layers:
+            percentage = (time_ms / total_time) * 100
+            print(f"{layer_name:80s} {time_ms:>8.4f} ms ({percentage:.2f}%)")
+
+        print("-" * 100)
+        print(f"Total Profiled Time: {total_time:.4f} ms")
+        print("Note: The times are accumulated over all generation steps.")
+        print("-" * 100)
+
 
 def load_engine(engine_file_path):
     """
@@ -30,13 +64,15 @@ def load_engine(engine_file_path):
     with open(engine_file_path, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
         return runtime.deserialize_cuda_engine(f.read())
 
-def generate_with_trt(engine, tokenizer, prompt, max_new_tokens, temperature, top_k):
+def generate_with_trt(engine, tokenizer, prompt, max_new_tokens, temperature, top_k, profiler=None):
     """
     Generates text using a TensorRT engine with an auto-regressive loop.
     """
     # --- 1. Initialization ---
     stream = cuda.Stream()
     context = engine.create_execution_context()
+    if profiler:
+        context.profiler = profiler
 
     # --- 2. Tokenize Prompt ---
     input_ids = text_to_token_ids(prompt, tokenizer)
@@ -137,6 +173,9 @@ def generate_with_trt(engine, tokenizer, prompt, max_new_tokens, temperature, to
     print(f"Tokens per second (GPU only): {1000.0 / avg_gpu_time_ms:.2f}")
     print(f"Tokens per second (end-to-end): {max_new_tokens / total_wall_time_s:.2f}")
 
+    if profiler:
+        profiler.print_layer_times()
+
     # --- 5. Cleanup is handled by pycuda.autoinit ---
 
     # --- 6. Decode and Return ---
@@ -150,7 +189,13 @@ def main():
     parser.add_argument("-e", "--engine-file", type=str, help="Path to the TensorRT engine file.")
     parser.add_argument("-p", "--prompt", type=str, default=PROMPT, help="The prompt for the model.")
     parser.add_argument("-t", "--tokenizer-file", type=str, default=TOKENIZER_FILE, help="Path to the tokenizer model file.")
+    parser.add_argument("--profile", action="store_true", help="Enable layer-wise profiling.")
     args = parser.parse_args()
+
+    profiler = None
+    if args.profile:
+        profiler = LayerProfiler()
+        print("Layer-wise profiling enabled.")
 
     print("Loading tokenizer...")
     tokenizer = Llama3Tokenizer(args.tokenizer_file)
@@ -166,6 +211,7 @@ def main():
         max_new_tokens=MAX_NEW_TOKENS,
         temperature=TEMPERATURE,
         top_k=TOP_K,
+        profiler=profiler,
     )
 
     print("\n--- Prompt ---")
