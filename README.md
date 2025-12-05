@@ -31,7 +31,7 @@ trtexec --onnx=llama3.2-1B-base.onnx --saveEngine=llama3.2-1B-base.trt --minShap
 ## Run Engine
 
 ```
-python3 run_engine.py -e llama3.2-1B-base.trt -t tokenzier.model
+python3 run_engine.py -e llama3.2-1B-base.trt -t tokenizer.model
 ```
 
 ## Reference
