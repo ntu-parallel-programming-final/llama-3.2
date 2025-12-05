@@ -8,8 +8,38 @@ tags:
 - llama-3.2
 ---
 
-# Llama 3.2 From Scratch
+# ONNX and TensorRT Setup
+## Enivornment
+- Ubuntu 22.04
+- TensorRT: 10.14.1
+- cuda: 13.1
+- python: 3.10.12
+- python package: in `requirements.txt`
 
+Install the above prerequisite packages before starting. Besides, download the model and tokenizer from [rasbt/llama-3.2-from-scratch](https://huggingface.co/rasbt/llama-3.2-from-scratch/tree/main) manually.
+
+## Generate ONNX File
+```bash
+python3 export_model.py -i llama3.2-1B-base.pth -o llama3.2-1B-base.onnx
+```
+
+## Generate TensorRT Engine File
+```bash
+trtexec --onnx=llama3.2-1B-base.onnx --saveEngine=llama3.2-1B-base.trt --minShapes=input_ids:1x1 --optShapes=input_ids:1x512 --maxShapes=input_ids:1x2048
+```
+
+## Run Engine
+
+```
+python3 run_engine.py -e llama3.2-1B-base.trt -t tokenzier.model
+```
+
+## Reference
+- https://docs.nvidia.com/deeplearning/tensorrt/latest/getting-started/quick-start-guide.html
+- https://leimao.github.io/blog/PyTorch-Custom-ONNX-Operator-Export/
+
+
+# Llama 3.2 From Scratch
 
 This repository contains a from-scratch, educational PyTorch implementation of **Llama 3.2 text models** with **minimal code dependencies**. The implementation is **optimized for readability** and intended for learning and research purposes.
 
