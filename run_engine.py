@@ -71,8 +71,14 @@ def generate_with_trt(engine, tokenizer, prompt, max_new_tokens, temperature, to
     context.set_tensor_address(input_tensor_name, int(d_input))
     context.set_tensor_address(output_tensor_name, int(d_output))
 
-    # --- 4. Generation Loop ---
+    # --- 4. Generation Loop (with profiling) ---
     start_time = time.time()
+
+    # Create CUDA events for profiling
+    start_event = cuda.Event()
+    end_event = cuda.Event()
+    total_gpu_time_ms = 0
+
     for _ in range(max_new_tokens):
         current_seq_len = input_ids.shape[1]
 
@@ -83,14 +89,18 @@ def generate_with_trt(engine, tokenizer, prompt, max_new_tokens, temperature, to
         input_data = np.ascontiguousarray(input_ids.numpy(), dtype=input_dtype)
         cuda.memcpy_htod_async(d_input, input_data, stream)
 
-        # c. Run inference
+        # c. Run inference with profiling
+        start_event.record(stream)
         context.execute_async_v3(stream.handle)
+        end_event.record(stream)
 
         # d. Copy output from device to host
         cuda.memcpy_dtoh_async(h_output, d_output, stream)
 
-        # e. Synchronize stream
+        # e. Synchronize stream and calculate GPU time
         stream.synchronize()
+        total_gpu_time_ms += end_event.time_since(start_event)
+
 
         # f. Process logits
         output_dims = context.get_tensor_shape(output_tensor_name)
@@ -116,7 +126,16 @@ def generate_with_trt(engine, tokenizer, prompt, max_new_tokens, temperature, to
         input_ids = torch.cat((input_ids, next_token_id), dim=1)
 
     end_time = time.time()
-    print(f"Time for {max_new_tokens} tokens: {end_time - start_time:.2f} sec")
+
+    # --- Performance Results ---
+    total_wall_time_s = end_time - start_time
+    avg_gpu_time_ms = total_gpu_time_ms / max_new_tokens
+    print(f"\n--- Performance ---")
+
+    print(f"Total GPU inference time: {total_gpu_time_ms:.2f} ms")
+    print(f"Average GPU inference time per token: {avg_gpu_time_ms:.2f} ms")
+    print(f"Tokens per second (GPU only): {1000.0 / avg_gpu_time_ms:.2f}")
+    print(f"Tokens per second (end-to-end): {max_new_tokens / total_wall_time_s:.2f}")
 
     # --- 5. Cleanup is handled by pycuda.autoinit ---
 
