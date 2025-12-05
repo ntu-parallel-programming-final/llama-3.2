@@ -1,21 +1,45 @@
 import torch
 from model import Llama3Model, LLAMA32_CONFIG_1B, LLAMA32_CONFIG_3B
 import os
+import argparse
 
 def main():
-    # --- Configuration ---
-    # Change these variables to export a different model
-    model_variant = "1B-base"  # Choices: "1B-base", "1B-instruct", "3B-base", "3B-instruct"
-    # --- End Configuration ---
+    parser = argparse.ArgumentParser(description="Export a Llama3.2 model to ONNX format.")
+    parser.add_argument(
+        "-i",
+        "--input-file",
+        dest="input_file",
+        type=str,
+        required=True,
+        help="Path to the input PyTorch model file (e.g., llama3.2-1B-base.pth)",
+    )
+    parser.add_argument(
+        "-o",
+        "--output-file",
+        dest="output_file",
+        type=str,
+        required=True,
+        help="Path for the output ONNX model file (e.g., llama3.2-1B-base.onnx)",
+    )
+    args = parser.parse_args()
 
-    if "1B" in model_variant:
+    # Determine model variant from input file name
+    input_filename = os.path.basename(args.input_file)
+    if "1B-base" in input_filename:
         config = LLAMA32_CONFIG_1B
-        weight_filename = f"llama3.2-{model_variant}.pth"
-    elif "3B" in model_variant:
+    elif "1B-instruct" in input_filename:
+        config = LLAMA32_CONFIG_1B
+    elif "3B-base" in input_filename:
         config = LLAMA32_CONFIG_3B
-        weight_filename = f"llama3.2-{model_variant}.pth"
+    elif "3B-instruct" in input_filename:
+        config = LLAMA32_CONFIG_3B
     else:
-        raise ValueError(f"Unknown model variant: {model_variant}")
+        raise ValueError(
+            f"Could not determine model variant from input file name: {input_filename}. "
+            "Please ensure the filename contains '1B-base', '1B-instruct', '3B-base', or '3B-instruct'."
+        )
+
+    weight_filename = args.input_file
 
     # Modify config for ONNX export: use float32 instead of bfloat16 for broader compatibility
     export_config = config.copy()
@@ -45,9 +69,7 @@ def main():
     dummy_input = torch.randint(0, export_config["vocab_size"], (batch_size, seq_length), dtype=torch.long)
 
     # Define the output path for the ONNX model
-    output_dir = "onnx_models"
-    os.makedirs(output_dir, exist_ok=True)
-    onnx_path = os.path.join(output_dir, f"llama3.2-{model_variant}.onnx")
+    onnx_path = args.output_file
     print(f"Exporting model to {onnx_path}...")
 
     # Export the model to ONNX format
