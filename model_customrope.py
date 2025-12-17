@@ -43,6 +43,23 @@ LLAMA32_CONFIG_3B = {
     }
 }
 
+class CustomRoPEOp(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, cos, sin):
+        head_dim = x.shape[-1]
+        x1 = x[..., : head_dim // 2]
+        x2 = x[..., head_dim // 2:]
+        rotated = torch.cat((-x2, x1), dim=-1)
+        x_rotated = (x * cos) + (rotated * sin)
+
+        return x_rotated.to(dtype=x.dtype)
+
+    @staticmethod
+    def symbolic(g, x, cos, sin):
+        plugin_name = "CustomRoPE"
+        return g.op(plugin_name, x, cos, sin)
+
+
 
 class RMSNorm(nn.Module):
     def __init__(self, dim: int, eps: float = 1e-5, dtype=None):
@@ -63,7 +80,7 @@ class RMSNorm(nn.Module):
         return (x_normed * self.weight.to(torch.float32)).to(original_dtype)
 
 
-class Llama3Model(nn.Module):
+class Llama3CustomRoPEModel(nn.Module):
     def __init__(self, cfg):
         super().__init__()
 
@@ -93,7 +110,8 @@ class Llama3Model(nn.Module):
         x = tok_embeds
 
         num_tokens = x.shape[1]
-        mask = torch.triu(torch.ones(num_tokens, num_tokens, device=x.device, dtype=torch.bool), diagonal=1)
+        mask = torch.triu(torch.ones(num_tokens, num_tokens, device=x.device, dtype=torch.int32), diagonal=1)
+        mask = mask.to(torch.bool)
 
         for block in self.trf_blocks:
             x = block(x, mask, self.cos, self.sin)
@@ -268,20 +286,13 @@ def apply_rope(x, cos, sin):
     batch_size, num_heads, seq_len, head_dim = x.shape
     assert head_dim % 2 == 0, "Head dimension must be even"
 
-    # Split x into first half and second half
-    x1 = x[..., : head_dim // 2]  # First half
-    x2 = x[..., head_dim // 2:]  # Second half
+    cos_sliced = cos[:seq_len, :]
+    sin_sliced = sin[:seq_len, :]
 
-    # Adjust sin and cos shapes
-    cos = cos[:seq_len, :].unsqueeze(0).unsqueeze(0)  # Shape: (1, 1, seq_len, head_dim)
-    sin = sin[:seq_len, :].unsqueeze(0).unsqueeze(0)
+    cos_sliced = cos_sliced.unsqueeze(0).unsqueeze(0)
+    sin_sliced = sin_sliced.unsqueeze(0).unsqueeze(0)
 
-    # Apply the rotary transformation
-    rotated = torch.cat((-x2, x1), dim=-1)
-    x_rotated = (x * cos) + (rotated * sin)
-
-    # It's ok to use lower-precision after applying cos and sin rotation
-    return x_rotated.to(dtype=x.dtype)
+    return CustomRoPEOp.apply(x, cos_sliced, sin_sliced)
 
 
 def text_to_token_ids(text, tokenizer):

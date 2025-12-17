@@ -1,7 +1,11 @@
 import torch
-from model import Llama3Model, LLAMA32_CONFIG_1B, LLAMA32_CONFIG_3B
 import os
 import argparse
+
+# Import both model classes and their respective configs (aliasing custom configs)
+from model import Llama3Model, LLAMA32_CONFIG_1B, LLAMA32_CONFIG_3B
+from model_customrope import Llama3CustomRoPEModel, LLAMA32_CONFIG_1B as LLAMA32_CUSTOM_CONFIG_1B, LLAMA32_CONFIG_3B as LLAMA32_CUSTOM_CONFIG_3B
+
 
 def main():
     parser = argparse.ArgumentParser(description="Export a Llama3.2 model to ONNX format.")
@@ -21,7 +25,24 @@ def main():
         required=True,
         help="Path for the output ONNX model file (e.g., llama3.2-1B-base.onnx)",
     )
+    parser.add_argument(
+        "-s",
+        "--model-source",
+        dest="model_source",
+        type=str,
+        default="default",
+        choices=["default", "custom-rope"],
+        help="Choose model source: 'default' for model.py or 'custom-rope' for model_customrope.py.",
+    )
     args = parser.parse_args()
+
+    # Assign the correct ModelClass and configs based on the --model-source argument
+    if args.model_source == "custom-rope":
+        print("Using model from model_customrope.py")
+        ActiveLlama3Model = Llama3CustomRoPEModel
+    else:
+        print("Using model from model.py")
+        ActiveLlama3Model = Llama3Model
 
     # Determine model variant from input file name
     input_filename = os.path.basename(args.input_file)
@@ -47,7 +68,7 @@ def main():
 
     # Instantiate the model with the export-friendly configuration
     print("Instantiating model for export...")
-    model = Llama3Model(export_config)
+    model = ActiveLlama3Model(export_config)
     model.eval()
 
     # Load the pre-trained weights, converting them from bfloat16 to float32 on the fly
