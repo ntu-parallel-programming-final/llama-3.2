@@ -189,8 +189,15 @@ def main():
     parser.add_argument("-e", "--engine-file", type=str, help="Path to the TensorRT engine file.")
     parser.add_argument("-p", "--prompt", type=str, default=PROMPT, help="The prompt for the model.")
     parser.add_argument("-t", "--tokenizer-file", type=str, default=TOKENIZER_FILE, help="Path to the tokenizer model file.")
+    parser.add_argument("--plugin", type=str, default='./build/libCustomRoPE.so', help="Path to the TensorRT plugin .so file.")
     parser.add_argument("--profile", action="store_true", help="Enable layer-wise profiling.")
     args = parser.parse_args()
+
+    if os.path.exists(args.plugin):
+        print(f"Loading plugin library: {args.plugin}")
+        ctypes.CDLL(args.plugin)
+    else:
+        print(f"Error: Plugin library not found at {args.plugin}")
 
     profiler = None
     if args.profile:
